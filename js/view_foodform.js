@@ -59,7 +59,7 @@ function renderQuantityModal(app) {
 
   return `
     <div class="modal-overlay" data-action="close-modal-overlay">
-      <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-sheet">
         <div class="page-header" style="border-bottom:1px solid var(--border);">
           <span style="width:18px"></span>
           <h2>${escapeHtml(name)}</h2>
@@ -90,7 +90,7 @@ function renderBarcodeModal(app) {
   if (!p || p.type !== 'barcode') return '';
   return `
     <div class="modal-overlay" data-action="close-modal-overlay">
-      <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-sheet">
         <div class="page-header" style="border-bottom:1px solid var(--border);">
           <span style="width:18px"></span>
           <h2>Scansiona barcode</h2>
