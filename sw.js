@@ -1,5 +1,5 @@
 // sw.js - Service Worker per Mangje! PWA
-const CACHE_NAME = 'mangje-v6';
+const CACHE_NAME = 'mangje-v7';
 
 const PRECACHE = [
   './',
