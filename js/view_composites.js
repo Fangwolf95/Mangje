@@ -105,7 +105,7 @@ function renderIngredientPickerModal(app) {
   const list = app.state.foods.filter(f => !query || f.name.toLowerCase().includes(query.toLowerCase()));
   return `
     <div class="modal-overlay" data-action="close-modal-overlay">
-      <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-sheet">
         <div class="page-header" style="border-bottom:1px solid var(--border);">
           <span style="width:18px"></span>
           <h2>Aggiungi ingrediente</h2>
@@ -140,7 +140,7 @@ function renderIngredientGramsModal(app) {
   const grams = p.grams ?? 100;
   return `
     <div class="modal-overlay" data-action="close-modal-overlay">
-      <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-sheet">
         <div class="page-header" style="border-bottom:1px solid var(--border);">
           <span style="width:18px"></span>
           <h2>${escapeHtml(p.food.name)}</h2>
