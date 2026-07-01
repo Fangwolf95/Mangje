@@ -18,32 +18,8 @@ function afterRender(app) {
   };
   root.addEventListener('click', root._clickHandler);
 
-  // Listener globale su document per i modali (bypassa stopPropagation)
-  if (document._modalClickHandler) document.removeEventListener('click', document._modalClickHandler);
-  document._modalClickHandler = async (e) => {
-    // Gestisci solo click dentro un .modal-overlay
-    const overlay = e.target.closest('.modal-overlay');
-    if (!overlay) return;
-
-    // Click sull'overlay stesso (fuori dal foglio) → chiudi
-    if (e.target === overlay) {
-      app.state.modal = null;
-      overlay.remove();
-      return;
-    }
-
-    // Click su un [data-action] dentro il modale
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    try {
-      await handleAction(app, btn.dataset.action, btn, e);
-    } catch (err) {
-      console.error('modal action error:', err);
-      app.showToast('Errore inatteso');
-      app.render();
-    }
-  };
-  document.addEventListener('click', document._modalClickHandler);
+  // Nessun listener globale su document per i modali:
+  // il listener viene agganciato sull'overlay stesso in showModal()
 
   // Live search alimenti
   const searchInput = root.querySelector('#food-search-input');
@@ -107,13 +83,34 @@ function showModal(app, modalHtml) {
   if (!modalHtml) return;
   const div = document.createElement('div');
   div.innerHTML = modalHtml;
-  const modalEl = div.firstElementChild;
-  if (!modalEl) return;
-  document.body.appendChild(modalEl);
+  const overlay = div.firstElementChild;
+  if (!overlay) return;
+  document.body.appendChild(overlay);
+
+  // Listener click sull'overlay:
+  // - click sull'overlay stesso (fuori dal foglio) → chiudi
+  // - click su [data-action] dentro il foglio → gestisci
+  overlay.addEventListener('click', async (e) => {
+    // Chiudi se click direttamente sull'overlay (sfondo scuro)
+    if (e.target === overlay) {
+      app.state.modal = null;
+      overlay.remove();
+      return;
+    }
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    try {
+      await handleAction(app, btn.dataset.action, btn, e);
+    } catch (err) {
+      console.error('modal action error:', err);
+      app.showToast('Errore inatteso');
+      app.render();
+    }
+  });
 
   // Focus sul primo input dopo un tick
   setTimeout(() => {
-    const first = modalEl.querySelector('input:not([type=file]), select');
+    const first = overlay.querySelector('input:not([type=file]), select');
     if (first) first.focus();
   }, 60);
 }
