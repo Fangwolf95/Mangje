@@ -61,7 +61,7 @@ function renderProfilePickerModal(app) {
   const day = app.getDay(app.state.currentDate);
   return `
     <div class="modal-overlay" data-action="close-modal-overlay">
-      <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div class="modal-sheet">
         <div class="page-header" style="border-bottom:1px solid var(--border);">
           <span style="width:18px"></span>
           <h2>Profilo del giorno</h2>
