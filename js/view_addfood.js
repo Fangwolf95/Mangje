@@ -3,32 +3,31 @@
 function renderAddFood(app) {
   const tab = app.state.viewParams?.tab || 'database';
   const query = app.state.viewParams?.query || '';
-  const offResults = app.state.viewParams?.offResults || null;
-  const searching = app.state.viewParams?.searching || false;
 
   let listHtml = '';
 
   if (tab === 'database') {
     const local = app.state.foods.filter(f => !query || f.name.toLowerCase().includes(query.toLowerCase()));
-    const showOff = query.length >= 2;
-
     listHtml = `
-      ${local.length ? local.map(f => renderFoodSearchRow(f)).join('') : ''}
-      ${showOff ? `
+      <div id="food-list-container">
+        ${local.map(f => renderFoodSearchRow(f)).join('')}
+      </div>
+
+      <div id="off-section" style="${query.length >= 2 ? '' : 'display:none'}">
         <p class="section-title" style="margin: 14px 0 8px;">Open Food Facts</p>
-        ${searching ? `<div class="empty-state" style="padding:20px 0;"><i class="ti ti-loader-2" aria-hidden="true"></i><p>Cerco...</p></div>` : ''}
-        ${!searching && offResults ? offResults.map(p => renderOffSearchRow(p)).join('') : ''}
-        ${!searching && offResults && offResults.length === 0 ? `<p style="font-size:13px; color:var(--text-secondary); padding: 8px 0;">Nessun risultato online.</p>` : ''}
-      ` : ''}
-      ${!local.length && !showOff ? `
+        <div id="off-results-container"></div>
+      </div>
+
+      ${!local.length && query.length < 2 ? `
         <div class="empty-state" style="padding: 30px 0;">
           <i class="ti ti-search" aria-hidden="true"></i>
-          <p>Cerca un alimento per nome, oppure scansiona un barcode.</p>
+          <p>Cerca un alimento per nome o scansiona un barcode.</p>
         </div>
       ` : ''}
-      <div class="food-row" data-action="nav" data-view="foodForm" style="cursor:pointer;">
+
+      <div class="food-row" data-action="nav" data-view="foodForm" style="cursor:pointer; margin-top:4px;">
         <div class="icon-box"><i class="ti ti-plus" aria-hidden="true"></i></div>
-        <div class="info"><p class="name" style="color:var(--text-secondary);">Non trovi l'alimento? Aggiungilo</p></div>
+        <div class="info"><p class="name" style="color:var(--text-secondary);">Non trovi l'alimento? Aggiungilo manualmente</p></div>
       </div>
     `;
   } else if (tab === 'composites') {
@@ -60,7 +59,7 @@ function renderAddFood(app) {
     <div class="search-row" style="margin-top: 12px;">
       <div class="search-input-wrap">
         <i class="ti ti-search" aria-hidden="true"></i>
-        <input type="text" id="food-search-input" placeholder="Cerca alimento..." value="${escapeHtml(query)}" />
+        <input type="text" id="food-search-input" placeholder="Cerca alimento..." value="${escapeHtml(query)}" autocomplete="off" />
       </div>
       <button class="barcode-btn" data-action="scan-barcode" aria-label="Scansiona barcode">
         <i class="ti ti-barcode" aria-hidden="true"></i>
@@ -99,7 +98,7 @@ function renderOffSearchRow(p) {
       <div class="icon-box"><i class="ti ti-barcode" aria-hidden="true"></i></div>
       <div class="info">
         <p class="name">${escapeHtml(p.name)}</p>
-        <p class="meta">${r(p.kcal100)} kcal · 100g ${p.brand ? '· ' + escapeHtml(p.brand) : ''}</p>
+        <p class="meta">${r(p.kcal100)} kcal · 100g${p.brand ? ' · ' + escapeHtml(p.brand) : ''}</p>
       </div>
       <i class="ti ti-plus" style="color:var(--accent); font-size:18px;" aria-hidden="true"></i>
     </div>
