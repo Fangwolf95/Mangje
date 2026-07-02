@@ -21,41 +21,89 @@ function afterRender(app) {
   // Nessun listener globale su document per i modali:
   // il listener viene agganciato sull'overlay stesso in showModal()
 
-  // Live search alimenti
+  // Live search alimenti — NON ri-renderizza la vista intera mentre si digita
+  // per evitare il bug del cursore che salta all'inizio
   const searchInput = root.querySelector('#food-search-input');
   if (searchInput) {
     searchInput.focus();
+    // Posiziona cursore alla fine
+    const len = searchInput.value.length;
+    searchInput.setSelectionRange(len, len);
+
     let offTimer;
     searchInput.addEventListener('input', () => {
-      const q = searchInput.value.trim();
-      app.state.viewParams = { ...app.state.viewParams, query: q, offResults: null };
-      app.render();
-      if (q.length >= 2) {
+      const q = searchInput.value;
+      app.state.viewParams = { ...app.state.viewParams, query: q, offResults: null, searching: false };
+
+      // Aggiorna solo la lista risultati, non tutta la vista
+      refreshFoodList(app, q);
+
+      if (q.trim().length >= 2) {
         clearTimeout(offTimer);
         offTimer = setTimeout(async () => {
-          app.state.viewParams.searching = true;
-          app.render();
-          const results = await OpenFoodFacts.searchByName(q);
-          app.state.viewParams.searching = false;
+          const resultsContainer = document.getElementById('off-results-container');
+          if (resultsContainer) resultsContainer.innerHTML = '<p style="font-size:13px;color:var(--text-secondary);padding:8px 0;">Cerco su Open Food Facts...</p>';
+          const results = await OpenFoodFacts.searchByName(q.trim());
           app.state.viewParams.offResults = results;
-          app.render();
+          const container = document.getElementById('off-results-container');
+          if (container) {
+            container.innerHTML = results.length
+              ? results.map(p => renderOffSearchRow(p)).join('')
+              : '<p style="font-size:13px;color:var(--text-secondary);padding:8px 0;">Nessun risultato online.</p>';
+            // Ri-aggancia eventi sui nuovi elementi
+            container.querySelectorAll('[data-action]').forEach(el => {
+              el.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                try { await handleAction(app, el.dataset.action, el, e); }
+                catch(err) { console.error(err); app.showToast('Errore'); }
+              });
+            });
+          }
         }, 600);
+      } else {
+        const container = document.getElementById('off-results-container');
+        if (container) container.innerHTML = '';
       }
     });
   }
 
   // Live search ingredienti (modale composto)
-  const ingSearch = root.querySelector('#ingredient-search-input');
+  const ingSearch = root.querySelector('#ingredient-search-input') || document.querySelector('#ingredient-search-input');
   if (ingSearch) {
     ingSearch.focus();
+    const len = ingSearch.value.length;
+    ingSearch.setSelectionRange(len, len);
     ingSearch.addEventListener('input', () => {
       if (app.state.modal) app.state.modal.query = ingSearch.value;
-      app.render();
+      // Aggiorna solo la lista nel modale
+      const listEl = document.getElementById('ingredient-list');
+      if (listEl) {
+        const q = ingSearch.value;
+        const list = app.state.foods.filter(f => !q || f.name.toLowerCase().includes(q.toLowerCase()));
+        listEl.innerHTML = list.length
+          ? list.map(f => `
+            <div class="food-row" data-action="pick-ingredient" data-food-id="${f.id}" style="cursor:pointer;">
+              <div class="icon-box"><i class="ti ${getCategory(f.category).icon}" aria-hidden="true"></i></div>
+              <div class="info">
+                <p class="name">${escapeHtml(f.name)}</p>
+                <p class="meta">${r(f.kcal100)} kcal · 100g</p>
+              </div>
+              <i class="ti ti-plus" style="color:var(--accent); font-size:18px;" aria-hidden="true"></i>
+            </div>`).join('')
+          : '<p style="font-size:13px;color:var(--text-secondary);padding:14px 0;">Nessun alimento trovato.</p>';
+        listEl.querySelectorAll('[data-action]').forEach(el => {
+          el.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try { await handleAction(app, el.dataset.action, el, e); }
+            catch(err) { console.error(err); }
+          });
+        });
+      }
     });
   }
 
   // Live preview quantità nel modale
-  const qtyInput = root.querySelector('#qty-grams');
+  const qtyInput = root.querySelector('#qty-grams') || document.querySelector('#qty-grams');
   if (qtyInput) {
     qtyInput.focus();
     qtyInput.addEventListener('input', () => {
@@ -70,10 +118,24 @@ function afterRender(app) {
       if (qs('#qty-fat')) qs('#qty-fat').textContent = r(p.fat100 * factor) + 'g';
     });
   }
+}
 
-  // Barcode scanner
-  if (app.state.modal?.type === 'barcode') {
-    startBarcodeScanner(app);
+// Aggiorna solo la lista risultati senza toccare l'input
+function refreshFoodList(app, query) {
+  const tab = app.state.viewParams?.tab || 'database';
+  const listEl = document.getElementById('food-list-container');
+  if (!listEl) return;
+
+  if (tab === 'database') {
+    const local = app.state.foods.filter(f => !query || f.name.toLowerCase().includes(query.toLowerCase()));
+    listEl.innerHTML = local.map(f => renderFoodSearchRow(f)).join('');
+    listEl.querySelectorAll('[data-action]').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try { await handleAction(app, el.dataset.action, el, e); }
+        catch(err) { console.error(err); }
+      });
+    });
   }
 }
 
@@ -91,7 +153,6 @@ function showModal(app, modalHtml) {
   // - click sull'overlay stesso (fuori dal foglio) → chiudi
   // - click su [data-action] dentro il foglio → gestisci
   overlay.addEventListener('click', async (e) => {
-    // Chiudi se click direttamente sull'overlay (sfondo scuro)
     if (e.target === overlay) {
       app.state.modal = null;
       overlay.remove();
@@ -111,7 +172,7 @@ function showModal(app, modalHtml) {
   // Focus sul primo input dopo un tick
   setTimeout(() => {
     const first = overlay.querySelector('input:not([type=file]), select');
-    if (first) first.focus();
+    if (first) { first.focus(); const l=first.value.length; first.setSelectionRange(l,l); }
   }, 60);
 }
 
@@ -172,7 +233,6 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- aggiungi alimento ---
     case 'set-add-tab':
       app.state.viewParams = { tab: btn.dataset.tab, query: '' };
       app.render();
@@ -188,7 +248,6 @@ async function handleAction(app, action, btn, e) {
         foodId: food.id, grams: 100
       };
       showModal(app, renderQuantityModal(app));
-      // rilancia afterRender per agganciare il live preview qty
       afterRender(app);
       break;
     }
@@ -243,14 +302,12 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- barcode ---
     case 'scan-barcode':
       app.state.modal = { type: 'barcode' };
       showModal(app, renderBarcodeModal(app));
       startBarcodeScanner(app);
       break;
 
-    // --- alimento manuale ---
     case 'save-food': {
       const name = document.getElementById('ff-name')?.value.trim();
       if (!name) { app.showToast('Inserisci un nome'); break; }
@@ -294,7 +351,6 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- composti ---
     case 'new-composite':
       app.state.compositeDraft = { name: '', ingredients: [] };
       app.setView('compositeForm');
@@ -370,7 +426,6 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- profili ---
     case 'new-profile':
       document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
       app.setView('profileForm');
@@ -411,7 +466,6 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- abitudini ---
     case 'new-habit':
       app.state.modal = { type: 'habitForm', habit: {} };
       showModal(app, renderHabitModal(app));
@@ -452,7 +506,6 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- peso ---
     case 'save-weight': {
       const kgEl = document.getElementById('weight-kg');
       const kg = parseFloat(kgEl?.value);
@@ -464,7 +517,6 @@ async function handleAction(app, action, btn, e) {
       break;
     }
 
-    // --- backup ---
     case 'export-data': {
       const data = await DB.exportAll();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -504,42 +556,40 @@ async function handleAction(app, action, btn, e) {
 }
 
 // ---------- Barcode scanner ----------
+// Usa html5-qrcode (build IIFE, si auto-installa su window.Html5Qrcode)
 
 async function startBarcodeScanner(app) {
   const readerEl = document.getElementById('barcode-reader');
   const statusEl = document.getElementById('barcode-status');
   if (!readerEl) return;
 
-  if (!window.ZXingBrowser) {
+  // Carica html5-qrcode se non già disponibile
+  if (!window.Html5Qrcode) {
     if (statusEl) statusEl.textContent = 'Caricamento scanner...';
     try {
-      await loadScript('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.1/esm/index.min.js', true);
+      await loadScript('https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js');
     } catch (err) {
-      if (statusEl) statusEl.textContent = 'Impossibile caricare lo scanner.';
-      return;
+      try {
+        await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js');
+      } catch (err2) {
+        if (statusEl) statusEl.textContent = 'Impossibile caricare lo scanner. Verifica la connessione.';
+        return;
+      }
     }
   }
 
   try {
-    const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
-    const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-    const deviceId = devices.find(d => /back|rear|environment/i.test(d.label))?.deviceId || devices[0]?.deviceId;
+    if (statusEl) statusEl.textContent = 'Avvio fotocamera...';
 
-    if (!deviceId) {
-      if (statusEl) statusEl.textContent = 'Nessuna fotocamera trovata.';
-      return;
-    }
+    const html5QrCode = new Html5Qrcode('barcode-reader');
 
-    if (statusEl) statusEl.textContent = 'Inquadra il codice a barre…';
-
-    await codeReader.decodeFromVideoDevice(deviceId, readerEl, async (result, err) => {
-      if (!result) return;
-      codeReader.reset();
-      const barcode = result.getText();
+    const onScanSuccess = async (decodedText) => {
+      try { await html5QrCode.stop(); } catch (_) {}
 
       app.state.modal = null;
       document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
 
+      const barcode = decodedText;
       let food = await DB.findByBarcode(barcode);
       if (food) {
         app.state.modal = {
@@ -561,11 +611,20 @@ async function startBarcodeScanner(app) {
         return;
       }
       app.setView('foodForm', { prefill: { ...product, id: uid(), barcode } });
-    });
+    };
 
+    await html5QrCode.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 150 } },
+      onScanSuccess
+    );
+
+    if (statusEl) statusEl.textContent = 'Inquadra il codice a barre...';
+
+    // Ferma scanner quando il modale viene chiuso
     const observer = new MutationObserver(() => {
       if (!document.querySelector('#barcode-reader')) {
-        try { codeReader.reset(); } catch (_) {}
+        try { html5QrCode.stop(); } catch (_) {}
         observer.disconnect();
       }
     });
@@ -577,13 +636,12 @@ async function startBarcodeScanner(app) {
   }
 }
 
-function loadScript(src, isModule = false) {
+function loadScript(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = src;
-    if (isModule) s.type = 'module';
     s.onload = resolve;
-    s.onerror = reject;
+    s.onerror = () => reject(new Error('Failed to load: ' + src));
     document.head.appendChild(s);
   });
 }
