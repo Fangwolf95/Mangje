@@ -118,6 +118,7 @@ function renderIngredientPickerModal(app) {
           </div>
         </div>
         <div class="page-body" style="padding-top:4px;">
+          <div id="ingredient-list">
           ${list.length ? list.map(f => `
             <div class="food-row" data-action="pick-ingredient" data-food-id="${f.id}" style="cursor:pointer;">
               <div class="icon-box"><i class="ti ${getCategory(f.category).icon}" aria-hidden="true"></i></div>
@@ -128,6 +129,7 @@ function renderIngredientPickerModal(app) {
               <i class="ti ti-plus" style="color:var(--accent); font-size:18px;" aria-hidden="true"></i>
             </div>
           `).join('') : `<p style="font-size:13px; color:var(--text-secondary); padding:14px 0;">Nessun alimento trovato nel tuo database. Aggiungilo prima dalla sezione Aggiungi alimento.</p>`}
+          </div>
         </div>
       </div>
     </div>
